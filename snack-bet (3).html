@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snack Bet! 🍿</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #F9FAFB; color: #111827; min-height: 100vh; padding: 28px 16px 60px; }
+    .wrap { max-width: 520px; margin: 0 auto; }
+    .header { text-align: center; margin-bottom: 22px; }
+    .header .icon { font-size: 38px; margin-bottom: 6px; }
+    .header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 6px; }
+    .header p { color: #6B7280; font-size: 14px; }
+    .banner { border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; text-align: center; border: 1.5px solid; }
+    .banner.green  { background: #F0FDF4; border-color: #86EFAC; color: #15803D; }
+    .banner.blue   { background: #EFF6FF; border-color: #BFDBFE; color: #1D4ED8; }
+    .banner.yellow { background: #FFFBEB; border-color: #FCD34D; color: #92400E; }
+    .banner.sky    { background: #F0F9FF; border-color: #BAE6FD; color: #0369A1; }
+    .banner .emoji { font-size: 20px; margin-bottom: 4px; }
+    .banner .title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+    .banner .sub   { font-size: 13px; opacity: 0.85; }
+    .banner .count { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .card { background: #fff; border: 1.5px solid #E5E7EB; border-radius: 14px; padding: 20px 16px; margin-bottom: 16px; }
+    .card.locked { opacity: 0.45; pointer-events: none; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+    input[type="text"] { width: 100%; font-size: 15px; padding: 10px 13px; border: 1.5px solid #D1D5DB; border-radius: 9px; outline: none; color: #111827; background: #FAFAFA; margin-bottom: 16px; }
+    input[type="text"]:focus { border-color: #93C5FD; }
+    .slot-label { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+    .slot-label .hint { font-size: 12px; font-weight: 400; color: #9CA3AF; }
+    .slot-label .selected-tag { font-size: 12px; font-weight: 400; color: #2563EB; }
+    .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+    .slot { border-radius: 6px; padding: 6px 2px; border: 1.5px solid #D1D5DB; background: #fff; cursor: pointer; font-size: 11px; font-weight: 600; color: #111827; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; text-align: center; line-height: 1; transition: background 0.1s, border-color 0.1s; }
+    .slot:hover:not(.taken):not(.sel) { background: #EFF6FF; border-color: #93C5FD; }
+    .slot.taken { background: #F3F4F6; border-color: #E5E7EB; color: #C4C9D4; cursor: not-allowed; }
+    .slot.sel   { background: #1D4ED8; border-color: #1D4ED8; color: #fff; }
+    .error { background: #FEF2F2; border: 1.5px solid #FCA5A5; border-radius: 9px; padding: 10px 14px; margin-bottom: 12px; color: #B91C1C; font-size: 14px; }
+    .success { background: #F0FDF4; border: 1.5px solid #86EFAC; border-radius: 9px; padding: 10px 14px; margin-bottom: 12px; color: #15803D; font-size: 14px; font-weight: 500; }
+    .hidden { display: none !important; }
+    .submit-btn { width: 100%; background: #111827; color: #fff; border: none; border-radius: 11px; padding: 14px 0; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 28px; letter-spacing: -0.2px; }
+    .submit-btn:disabled { background: #9CA3AF; cursor: not-allowed; }
+    .board-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .board-header h2 { font-size: 15px; font-weight: 700; }
+    .board-header .count-tag { font-size: 13px; font-weight: 400; color: #6B7280; margin-left: 6px; }
+    .refresh-btn { background: none; border: 1.5px solid #E5E7EB; border-radius: 7px; padding: 5px 11px; font-size: 12px; color: #6B7280; cursor: pointer; }
+    .refresh-btn:hover { border-color: #D1D5DB; }
+    .pick-list { display: flex; flex-direction: column; gap: 6px; }
+    .pick-row { display: flex; align-items: center; gap: 12px; background: #fff; border: 1.5px solid #E5E7EB; border-radius: 10px; padding: 10px 14px; }
+    .pick-num  { font-size: 11px; color: #D1D5DB; width: 18px; flex-shrink: 0; text-align: right; }
+    .pick-time { font-size: 14px; font-weight: 700; color: #1D4ED8; width: 78px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+    .pick-name { font-size: 14px; color: #374151; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .empty { text-align: center; padding: 36px 0; color: #9CA3AF; }
+    .empty .empty-icon { font-size: 32px; margin-bottom: 8px; }
+    .empty p { font-size: 14px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="icon">🍿</div>
+    <h1>Snack Bet!</h1>
+    <p>1:30 PM – 3:30 PM &nbsp;·&nbsp; No duplicates &nbsp;·&nbsp; Every Wednesday</p>
+  </div>
+
+  <!-- Status banners -->
+  <div id="banner-closed" class="banner sky hidden">
+    <div class="emoji">📅</div>
+    <div class="title" id="next-wed-label"></div>
+    <div class="sub">Betting opens at 12:00 PM Mountain Time</div>
+  </div>
+  <div id="banner-waiting" class="banner yellow hidden">
+    <div class="emoji">⏳</div>
+    <div class="title">Betting opens today at 12:00 PM MT</div>
+    <div class="count" id="countdown-text"></div>
+  </div>
+  <div id="banner-open" class="banner green hidden">
+    <div class="title">🟢 Betting is open! &nbsp;·&nbsp; <span id="slots-left"></span></div>
+  </div>
+  <div id="banner-voted" class="banner blue hidden">
+    <div class="title" id="voted-title"></div>
+    <div class="sub" id="voted-sub"></div>
+  </div>
+
+  <!-- Betting form -->
+  <div class="card" id="form-card">
+    <label for="name-input">Your name</label>
+    <input type="text" id="name-input" placeholder="Enter your name" maxlength="40" />
+    <div class="slot-label">
+      <label style="margin:0">Choose a time slot <span class="hint">(all PM · hover for name)</span></label>
+      <span class="selected-tag hidden" id="selected-tag"></span>
+    </div>
+    <div class="grid" id="slot-grid"></div>
+  </div>
+
+  <div id="error-msg" class="error hidden"></div>
+  <div id="success-msg" class="success hidden"></div>
+
+  <button class="submit-btn" id="submit-btn">Lock in my pick</button>
+
+  <!-- Picks board -->
+  <div class="board-header">
+    <h2>Picks board <span class="count-tag" id="board-count"></span></h2>
+    <button class="refresh-btn" onclick="loadPicks()">↻ Refresh</button>
+  </div>
+  <div id="pick-list" class="pick-list">
+    <div class="empty"><div class="empty-icon">🕐</div><p>Loading picks…</p></div>
+  </div>
+</div>
+
+<script>
+  // ── CONFIG ──────────────────────────────────────────────────────────────────
+  const BIN_ID  = "6a344924da38895dfed969d0";
+  const API_KEY = "$2a$10$OaYyTNpZSNUXK021PXPbsOglTOIuKb67TId4dAA8tWJFkE5cnoDS.";
+  const TESTING_MODE = false; // set to true to disable Wednesday/noon restriction for testing
+  // ────────────────────────────────────────────────────────────────────────────
+
+  const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+  const HEADERS = { "Content-Type": "application/json", "X-Master-Key": API_KEY };
+
+  // Generate slots: 1:30 PM – 3:30 PM, every minute
+  const SLOTS = [];
+  for (let t = 13*60+30; t <= 15*60+30; t++) {
+    const h = Math.floor(t/60), m = t%60;
+    SLOTS.push(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);
+  }
+
+  function fmt(t) {
+    const [h,m] = t.split(":").map(Number);
+    return `${h%12||12}:${String(m).padStart(2,"0")} ${h<12?"AM":"PM"}`;
+  }
+  function fmtShort(t) {
+    const [h,m] = t.split(":").map(Number);
+    return `${h%12||12}:${String(m).padStart(2,"0")}`;
+  }
+
+  function getMtInfo() {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Denver", weekday:"long", year:"numeric",
+      month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", hour12:false
+    }).formatToParts(new Date());
+    const p = t => parts.find(x=>x.type===t)?.value??"";
+    return { weekday:p("weekday"), year:p("year"), month:p("month"), day:p("day"), hour:parseInt(p("hour")), minute:parseInt(p("minute")) };
+  }
+
+  function getWednesdayKey() {
+    const i = getMtInfo();
+    const base = new Date(`${i.year}-${i.month}-${i.day}T12:00:00Z`);
+    const back = (base.getUTCDay()-3+7)%7;
+    const wed = new Date(base.getTime()-back*86400000);
+    const wm = String(wed.getUTCMonth()+1).padStart(2,"0");
+    const wd = String(wed.getUTCDate()).padStart(2,"0");
+    return `${wed.getUTCFullYear()}-${wm}-${wd}`;
+  }
+
+  function getNextWednesdayLabel() {
+    const i = getMtInfo();
+    const base = new Date(`${i.year}-${i.month}-${i.day}T12:00:00Z`);
+    const ahead = ((3-base.getUTCDay()+7)%7)||7;
+    return new Intl.DateTimeFormat("en-US",{weekday:"long",month:"long",day:"numeric"}).format(new Date(base.getTime()+ahead*86400000));
+  }
+
+  function getBettingStatus() {
+    if (TESTING_MODE) return "open";
+    const i = getMtInfo();
+    if (i.weekday==="Wednesday" && i.hour>=12) return "open";
+    if (i.weekday==="Wednesday") return "waiting";
+    return "closed";
+  }
+
+  // LocalStorage helpers for "already voted"
+  function getMyVote(weekKey) {
+    try { return JSON.parse(localStorage.getItem(`snackbet_${weekKey}`)); } catch { return null; }
+  }
+  function setMyVote(weekKey, vote) {
+    try { localStorage.setItem(`snackbet_${weekKey}`, JSON.stringify(vote)); } catch {}
+  }
+
+  // JSONBin
+  async function readPicks() {
+    const res = await fetch(`${JSONBIN_URL}/latest`, { headers: HEADERS });
+    if (!res.ok) { const t = await res.text().catch(()=>""); throw new Error(`HTTP ${res.status}: ${t.slice(0,100)}`); }
+    const data = await res.json();
+    return data.record?.picks ?? [];
+  }
+  async function writePicks(picks) {
+    const res = await fetch(JSONBIN_URL, { method:"PUT", headers:HEADERS, body:JSON.stringify({picks}) });
+    if (!res.ok) { const t = await res.text().catch(()=>""); throw new Error(`HTTP ${res.status}: ${t.slice(0,100)}`); }
+  }
+
+  // State
+  let picks = [];
+  let selected = null;
+  let myVote = null;
+  const weekKey = getWednesdayKey();
+
+  // UI helpers
+  const $ = id => document.getElementById(id);
+  function showError(msg) { $("error-msg").textContent = msg; $("error-msg").classList.remove("hidden"); }
+  function hideError() { $("error-msg").classList.add("hidden"); }
+  function showSuccess(msg) { $("success-msg").textContent = msg; $("success-msg").classList.remove("hidden"); setTimeout(()=>$("success-msg").classList.add("hidden"), 4500); }
+
+  function buildGrid() {
+    const grid = $("slot-grid");
+    grid.innerHTML = "";
+    const takenMap = Object.fromEntries(picks.map(p=>[p.time, p.name]));
+    SLOTS.forEach(slot => {
+      const who = takenMap[slot];
+      const btn = document.createElement("button");
+      btn.className = "slot" + (who?" taken":"") + (slot===selected?" sel":"");
+      btn.textContent = fmtShort(slot);
+      btn.title = who ? `Taken by ${who}` : fmt(slot);
+      btn.disabled = !!who;
+      if (!who) btn.onclick = () => {
+        selected = selected===slot ? null : slot;
+        updateSubmitBtn();
+        buildGrid();
+        const tag = $("selected-tag");
+        if (selected) { tag.textContent = `— ${fmt(selected)} selected`; tag.classList.remove("hidden"); }
+        else tag.classList.add("hidden");
+      };
+      grid.appendChild(btn);
+    });
+  }
+
+  function updateSubmitBtn() {
+    const btn = $("submit-btn");
+    btn.textContent = selected ? `🔒 Lock in ${fmt(selected)}` : "Lock in my pick";
+  }
+
+  function renderBoard() {
+    const sorted = [...picks].sort((a,b)=>a.time.localeCompare(b.time));
+    $("board-count").textContent = `(${picks.length} / ${SLOTS.length})`;
+    const list = $("pick-list");
+    if (sorted.length===0) {
+      list.innerHTML = `<div class="empty"><div class="empty-icon">🕐</div><p>No picks yet — be the first!</p></div>`;
+      return;
+    }
+    list.innerHTML = sorted.map((p,i)=>`
+      <div class="pick-row">
+        <span class="pick-num">#${i+1}</span>
+        <span class="pick-time">${fmt(p.time)}</span>
+        <span class="pick-name">${p.name.replace(/</g,"&lt;")}</span>
+      </div>`).join("");
+  }
+
+  function updateBanners() {
+    const status = getBettingStatus();
+    const mi = getMtInfo();
+    const minsLeft = 12*60-(mi.hour*60+mi.minute);
+    const ct = minsLeft>=60?`${Math.floor(minsLeft/60)}h ${minsLeft%60}m`:`${minsLeft}m`;
+
+    $("banner-closed").classList.toggle("hidden", status!=="closed");
+    $("banner-waiting").classList.toggle("hidden", status!=="waiting");
+    $("banner-open").classList.toggle("hidden", status!=="open");
+
+    if (status==="closed") $("next-wed-label").textContent = `Next Snack Bet opens ${getNextWednesdayLabel()}`;
+    if (status==="waiting") $("countdown-text").textContent = `${ct} to go`;
+    if (status==="open") $("slots-left").textContent = `${SLOTS.length-picks.length} slot${SLOTS.length-picks.length!==1?"s":""} left`;
+
+    const isLocked = status!=="open" || !!myVote;
+    $("form-card").classList.toggle("locked", isLocked);
+    $("submit-btn").classList.toggle("hidden", isLocked);
+
+    // Already voted banner
+    if (myVote && status==="open") {
+      $("banner-voted").classList.remove("hidden");
+      $("voted-title").textContent = `🔒 You're locked in at ${fmt(myVote.time)}`;
+      $("voted-sub").textContent = `Good luck, ${myVote.name}!`;
+    } else {
+      $("banner-voted").classList.add("hidden");
+    }
+  }
+
+  async function loadPicks() {
+    try {
+      const all = await readPicks();
+      picks = all.filter(p=>p.week===weekKey);
+      myVote = getMyVote(weekKey);
+      buildGrid();
+      renderBoard();
+      updateBanners();
+    } catch(e) {
+      showError(`Couldn't load picks: ${e.message}`);
+    }
+  }
+
+  $("submit-btn").onclick = async () => {
+    hideError();
+    const name = $("name-input").value.trim();
+    if (!name) { showError("Enter your name first."); return; }
+    if (!selected) { showError("Select a time slot."); return; }
+    if (getBettingStatus() !== "open") {
+      showError("Betting isn't open right now — refresh the page to see current status.");
+      updateBanners();
+      return;
+    }
+    $("submit-btn").disabled = true;
+    $("submit-btn").textContent = "Locking in…";
+    try {
+      const all = await readPicks();
+      const weekly = all.filter(p=>p.week===weekKey);
+      if (weekly.find(p=>p.time===selected)) {
+        showError(`${fmt(selected)} was just taken — pick another!`);
+        picks = weekly; selected = null; buildGrid(); renderBoard(); updateBanners();
+        $("submit-btn").disabled = false; updateSubmitBtn(); return;
+      }
+      if (weekly.find(p=>p.name.toLowerCase()===name.toLowerCase())) {
+        showError(`"${name}" already has a pick this week.`);
+        $("submit-btn").disabled = false; updateSubmitBtn(); return;
+      }
+      const newPick = { id: Date.now(), name, time: selected, week: weekKey };
+      await writePicks([...all, newPick]);
+      const vote = { name, time: selected };
+      setMyVote(weekKey, vote);
+      myVote = vote;
+      picks = [...weekly, newPick];
+      selected = null;
+      $("name-input").value = "";
+      $("selected-tag").classList.add("hidden");
+      showSuccess(`${name} locked in ${fmt(vote.time)}! 🔒`);
+      buildGrid(); renderBoard(); updateBanners();
+    } catch(e) {
+      showError(`Save failed: ${e.message}`);
+      $("submit-btn").disabled = false; updateSubmitBtn();
+    }
+  };
+
+  $("name-input").addEventListener("keydown", e => e.key==="Enter" && $("submit-btn").click());
+
+  // Init
+  myVote = getMyVote(weekKey);
+  updateBanners();
+  loadPicks();
+  setInterval(loadPicks, 10000);
+  setInterval(updateBanners, 30000);
+
+  // Browsers pause/throttle timers in background tabs — force a re-check
+  // the instant someone returns to this tab or the window regains focus,
+  // so a stale "unlocked" view can't linger past the actual lock time.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) { updateBanners(); loadPicks(); }
+  });
+  window.addEventListener("focus", () => { updateBanners(); loadPicks(); });
+
+</script>
+</body>
+</html>
