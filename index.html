@@ -109,13 +109,11 @@
 
 <script>
   // ── CONFIG ──────────────────────────────────────────────────────────────────
-  const BIN_ID  = "6a344924da38895dfed969d0";
-  const API_KEY = "$2a$10$OaYyTNpZSNUXK021PXPbsOglTOIuKb67TId4dAA8tWJFkE5cnoDS.";
+  const FIREBASE_URL = "https://snack-bet-default-rtdb.firebaseio.com/";
   const TESTING_MODE = false; // set to true to disable Wednesday/noon restriction for testing
   // ────────────────────────────────────────────────────────────────────────────
 
-  const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
-  const HEADERS = { "Content-Type": "application/json", "X-Master-Key": API_KEY };
+  const PICKS_URL = `${FIREBASE_URL.replace(/\/$/, "")}/picks.json`;
 
   // Generate slots: 1:30 PM – 3:30 PM, every minute
   const SLOTS = [];
@@ -176,14 +174,15 @@
   }
 
   // JSONBin
+  // Firebase Realtime Database (REST) — open rules, no key needed
   async function readPicks() {
-    const res = await fetch(`${JSONBIN_URL}/latest`, { headers: HEADERS });
+    const res = await fetch(PICKS_URL);
     if (!res.ok) { const t = await res.text().catch(()=>""); throw new Error(`HTTP ${res.status}: ${t.slice(0,100)}`); }
     const data = await res.json();
-    return data.record?.picks ?? [];
+    return Array.isArray(data) ? data.filter(Boolean) : (data ? Object.values(data) : []);
   }
   async function writePicks(picks) {
-    const res = await fetch(JSONBIN_URL, { method:"PUT", headers:HEADERS, body:JSON.stringify({picks}) });
+    const res = await fetch(PICKS_URL, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(picks) });
     if (!res.ok) { const t = await res.text().catch(()=>""); throw new Error(`HTTP ${res.status}: ${t.slice(0,100)}`); }
   }
 
