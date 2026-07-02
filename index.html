@@ -76,6 +76,11 @@
   <div id="banner-open" class="banner green hidden">
     <div class="title">🟢 Betting is open! &nbsp;·&nbsp; <span id="slots-left"></span></div>
   </div>
+  <div id="banner-results" class="banner blue hidden">
+    <div class="emoji">🏁</div>
+    <div class="title">Betting closed for today at 3:30 PM</div>
+    <div class="sub">Final picks are locked in below — see you next Wednesday!</div>
+  </div>
   <div id="banner-voted" class="banner blue hidden">
     <div class="title" id="voted-title"></div>
     <div class="sub" id="voted-sub"></div>
@@ -99,7 +104,7 @@
 
   <!-- Picks board -->
   <div class="board-header">
-    <h2>Picks board <span class="count-tag" id="board-count"></span></h2>
+    <h2><span id="board-title">Picks board</span> <span class="count-tag" id="board-count"></span></h2>
     <button class="refresh-btn" onclick="loadPicks()">↻ Refresh</button>
   </div>
   <div id="pick-list" class="pick-list">
@@ -160,9 +165,11 @@
   function getBettingStatus() {
     if (TESTING_MODE) return "open";
     const i = getMtInfo();
-    if (i.weekday==="Wednesday" && i.hour>=12) return "open";
-    if (i.weekday==="Wednesday") return "waiting";
-    return "closed";
+    if (i.weekday !== "Wednesday") return "closed";
+    const mins = i.hour * 60 + i.minute;
+    if (mins < 12 * 60) return "waiting";
+    if (mins < 15 * 60 + 30) return "open";
+    return "results";
   }
 
   // LocalStorage helpers for "already voted"
@@ -251,10 +258,13 @@
     $("banner-closed").classList.toggle("hidden", status!=="closed");
     $("banner-waiting").classList.toggle("hidden", status!=="waiting");
     $("banner-open").classList.toggle("hidden", status!=="open");
+    $("banner-results").classList.toggle("hidden", status!=="results");
 
     if (status==="closed") $("next-wed-label").textContent = `Next Snack Bet opens ${getNextWednesdayLabel()}`;
     if (status==="waiting") $("countdown-text").textContent = `${ct} to go`;
     if (status==="open") $("slots-left").textContent = `${SLOTS.length-picks.length} slot${SLOTS.length-picks.length!==1?"s":""} left`;
+
+    $("board-title").textContent = status==="closed" ? "Last week's picks" : status==="results" ? "Today's final picks" : "Picks board";
 
     const isLocked = status!=="open" || !!myVote;
     $("form-card").classList.toggle("locked", isLocked);
