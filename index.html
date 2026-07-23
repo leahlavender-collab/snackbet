@@ -181,8 +181,19 @@
   // Firebase Realtime Database (REST) — each slot is its own address, e.g.
   // /picks/{weekKey}/{time}. This means two people picking different slots
   // NEVER conflict, and the database itself (not the browser) refuses a
-  // second write to the same slot — see the security rules note below.
+  // second write to the same slot.
+  //
+  // REQUIRED Firebase Rules (Realtime Database → Rules tab):
+  // {
+  //   "rules": {
+  //     "picks": {
+  //       ".read": true,
+  //       "$week": { "$slot": { ".write": "!data.exists()" } }
+  //     }
+  //   }
+  // }
   const BASE = FIREBASE_URL.replace(/\/$/, "");
+  const SLOT_SET = new Set(SLOTS); // for validating keys read back from the DB
   function slotKey(time) { return time.replace(":", "-"); }
   function keyToSlot(key) { return key.replace("-", ":"); }
 
@@ -190,20 +201,38 @@
     const res = await fetch(`${BASE}/picks/${weekKey}.json`);
     if (!res.ok) { const t = await res.text().catch(()=>""); throw new Error(`HTTP ${res.status}: ${t.slice(0,100)}`); }
     const data = await res.json();
-    if (!data) return [];
-    return Object.entries(data).map(([key, val]) => ({ time: keyToSlot(key), name: val.name, week: weekKey }));
+    if (!data || typeof data !== "object") return [];
+    const out = [];
+    for (const [key, val] of Object.entries(data)) {
+      const time = keyToSlot(key);
+      // Skip anything that isn't a recognized slot or doesn't have a valid
+      // name — a single malformed entry (e.g. from manual DB edits) should
+      // never take down the whole board for everyone.
+      if (!SLOT_SET.has(time)) continue;
+      if (!val || typeof val.name !== "string" || !val.name.trim()) continue;
+      out.push({ time, name: val.name, week: weekKey, claimedAt: val.claimedAt || null });
+    }
+    return out;
   }
 
   // Attempts to claim a slot. Succeeds only if nobody has claimed it yet —
   // enforced by the database's security rules, not by this code, so it's
   // safe even if two people submit at the exact same instant.
   async function claimSlot(weekKey, time, name) {
-    const res = await fetch(`${BASE}/picks/${weekKey}/${slotKey(time)}.json`, {
+    const path = `${BASE}/picks/${weekKey}/${slotKey(time)}.json`;
+    const res = await fetch(path, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, claimedAt: new Date().toISOString() }),
     });
-    if (res.status === 401 || res.status === 403) return { ok: false }; // someone beat us to it
+    if (res.status === 401 || res.status === 403) {
+      // Could mean "someone beat us to it" (rules working as intended) OR
+      // "rules are misconfigured" (nobody can ever write). Tell them apart
+      // by checking whether the slot is actually occupied now.
+      const check = await fetch(path).then(r => r.json()).catch(() => null);
+      if (check && check.name) return { ok: false, reason: "taken" };
+      return { ok: false, reason: "denied" };
+    }
     if (!res.ok) { const t = await res.text().catch(()=>""); throw new Error(`HTTP ${res.status}: ${t.slice(0,100)}`); }
     return { ok: true };
   }
@@ -336,19 +365,30 @@
 
       const result = await claimSlot(weekKey, selected, name);
       if (!result.ok) {
-        // Someone claimed this slot in the split second between our check and
-        // our write. The database rejected us — refresh to show who has it.
-        picks = await readWeekPicks(weekKey);
-        showError(`${fmt(selected)} was just taken — pick another!`);
-        selected = null;
-        buildGrid(); renderBoard(); updateBanners();
+        if (result.reason === "denied") {
+          // Rejected, but the slot is still empty — this isn't a real
+          // conflict, something's wrong with the database setup itself.
+          showError("Couldn't save your pick — the board may be misconfigured. Try refreshing, or let the organizer know.");
+        } else {
+          // Genuinely taken — refresh so the UI shows who actually has it.
+          picks = await readWeekPicks(weekKey);
+          showError(`${fmt(selected)} was just taken — pick another!`);
+          selected = null;
+          buildGrid(); renderBoard();
+        }
+        updateBanners();
         $("submit-btn").disabled = false; updateSubmitBtn(); return;
       }
 
       const vote = { name, time: selected };
       setMyVote(weekKey, vote);
       myVote = vote;
-      picks = await readWeekPicks(weekKey);
+      // Append locally instead of re-fetching — we know this write landed,
+      // and re-fetching immediately risks catching a moment where a
+      // concurrent write from someone else hasn't shown up yet either way.
+      // The regular poll (and focus/visibility refresh) will reconcile
+      // everyone's view within seconds.
+      picks = [...picks, vote];
       selected = null;
       $("name-input").value = "";
       $("selected-tag").classList.add("hidden");
