@@ -118,8 +118,6 @@
   const TESTING_MODE = false; // set to true to disable Wednesday/noon restriction for testing
   // ────────────────────────────────────────────────────────────────────────────
 
-  const PICKS_URL = `${FIREBASE_URL.replace(/\/$/, "")}/picks.json`;
-
   // Generate slots: 1:30 PM – 3:30 PM, every minute
   const SLOTS = [];
   for (let t = 13*60+30; t <= 15*60+30; t++) {
@@ -180,17 +178,34 @@
     try { localStorage.setItem(`snackbet_${weekKey}`, JSON.stringify(vote)); } catch {}
   }
 
-  // JSONBin
-  // Firebase Realtime Database (REST) — open rules, no key needed
-  async function readPicks() {
-    const res = await fetch(PICKS_URL);
+  // Firebase Realtime Database (REST) — each slot is its own address, e.g.
+  // /picks/{weekKey}/{time}. This means two people picking different slots
+  // NEVER conflict, and the database itself (not the browser) refuses a
+  // second write to the same slot — see the security rules note below.
+  const BASE = FIREBASE_URL.replace(/\/$/, "");
+  function slotKey(time) { return time.replace(":", "-"); }
+  function keyToSlot(key) { return key.replace("-", ":"); }
+
+  async function readWeekPicks(weekKey) {
+    const res = await fetch(`${BASE}/picks/${weekKey}.json`);
     if (!res.ok) { const t = await res.text().catch(()=>""); throw new Error(`HTTP ${res.status}: ${t.slice(0,100)}`); }
     const data = await res.json();
-    return Array.isArray(data) ? data.filter(Boolean) : (data ? Object.values(data) : []);
+    if (!data) return [];
+    return Object.entries(data).map(([key, val]) => ({ time: keyToSlot(key), name: val.name, week: weekKey }));
   }
-  async function writePicks(picks) {
-    const res = await fetch(PICKS_URL, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(picks) });
+
+  // Attempts to claim a slot. Succeeds only if nobody has claimed it yet —
+  // enforced by the database's security rules, not by this code, so it's
+  // safe even if two people submit at the exact same instant.
+  async function claimSlot(weekKey, time, name) {
+    const res = await fetch(`${BASE}/picks/${weekKey}/${slotKey(time)}.json`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (res.status === 401 || res.status === 403) return { ok: false }; // someone beat us to it
     if (!res.ok) { const t = await res.text().catch(()=>""); throw new Error(`HTTP ${res.status}: ${t.slice(0,100)}`); }
+    return { ok: true };
   }
 
   // State
@@ -282,8 +297,7 @@
 
   async function loadPicks() {
     try {
-      const all = await readPicks();
-      picks = all.filter(p=>p.week===weekKey);
+      picks = await readWeekPicks(weekKey);
       myVote = getMyVote(weekKey);
       buildGrid();
       renderBoard();
@@ -306,23 +320,35 @@
     $("submit-btn").disabled = true;
     $("submit-btn").textContent = "Locking in…";
     try {
-      const all = await readPicks();
-      const weekly = all.filter(p=>p.week===weekKey);
+      // Quick UX check against the latest data (not the safety mechanism itself —
+      // that lives in the database's rules via claimSlot below).
+      const weekly = await readWeekPicks(weekKey);
+      if (weekly.find(p=>p.name.toLowerCase()===name.toLowerCase())) {
+        showError(`"${name}" already has a pick this week.`);
+        picks = weekly; buildGrid(); renderBoard(); updateBanners();
+        $("submit-btn").disabled = false; updateSubmitBtn(); return;
+      }
       if (weekly.find(p=>p.time===selected)) {
         showError(`${fmt(selected)} was just taken — pick another!`);
         picks = weekly; selected = null; buildGrid(); renderBoard(); updateBanners();
         $("submit-btn").disabled = false; updateSubmitBtn(); return;
       }
-      if (weekly.find(p=>p.name.toLowerCase()===name.toLowerCase())) {
-        showError(`"${name}" already has a pick this week.`);
+
+      const result = await claimSlot(weekKey, selected, name);
+      if (!result.ok) {
+        // Someone claimed this slot in the split second between our check and
+        // our write. The database rejected us — refresh to show who has it.
+        picks = await readWeekPicks(weekKey);
+        showError(`${fmt(selected)} was just taken — pick another!`);
+        selected = null;
+        buildGrid(); renderBoard(); updateBanners();
         $("submit-btn").disabled = false; updateSubmitBtn(); return;
       }
-      const newPick = { id: Date.now(), name, time: selected, week: weekKey };
-      await writePicks([...all, newPick]);
+
       const vote = { name, time: selected };
       setMyVote(weekKey, vote);
       myVote = vote;
-      picks = [...weekly, newPick];
+      picks = await readWeekPicks(weekKey);
       selected = null;
       $("name-input").value = "";
       $("selected-tag").classList.add("hidden");
